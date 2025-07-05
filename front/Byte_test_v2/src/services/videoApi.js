@@ -52,6 +52,6 @@ export const videoApi = {
 
   // 获取帧图片
   getFrameImage(frameId) {
-    return `http://127.0.0.1:8000/files/frames/${frameId}/image`
+    return `http://127.0.0.1:8000//files/frames/${frameId}/image`
   }
 }

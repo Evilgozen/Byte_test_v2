@@ -12,6 +12,7 @@ from app.schemas.file_schemas import (
     VideoFileUpdate, 
     VideoFrameResponse,
     FrameExtractionRequest,
+    FrameExtractionServiceRequest,
     FrameExtractionResponse
 )
 
@@ -106,11 +107,17 @@ def extract_video_frames(
     """提取视频帧"""
     file_service = FileService(db)
     
-    # 设置video_file_id
-    request.video_file_id = file_id
+    # 创建内部服务请求对象
+    service_request = FrameExtractionServiceRequest(
+        video_file_id=file_id,
+        interval=request.interval,
+        max_frames=request.max_frames,
+        extraction_method=request.extraction_method,
+        frames_per_second=request.frames_per_second
+    )
     
     try:
-        extracted_frames = file_service.extract_frames(request)
+        extracted_frames = file_service.extract_frames(service_request)
         return FrameExtractionResponse(
             video_file_id=file_id,
             total_frames=len(extracted_frames),
@@ -153,3 +160,26 @@ def get_frame_image(
         path=frame.frame_path,
         media_type='image/jpeg'
     )
+
+@router.delete("/{file_id}/frames", summary="删除视频对应的所有分割帧")
+def delete_video_frames(
+    file_id: int,
+    db: Session = Depends(get_db)
+):
+    """删除视频对应的所有分割帧"""
+    file_service = FileService(db)
+    
+    # 检查视频文件是否存在
+    video_file = file_service.get_video_file(file_id)
+    if not video_file:
+        raise HTTPException(status_code=404, detail="视频文件不存在")
+    
+    try:
+        deleted_count = file_service.delete_video_frames(file_id)
+        return {
+            "message": f"成功删除 {deleted_count} 个视频帧",
+            "video_file_id": file_id,
+            "deleted_frames_count": deleted_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -129,7 +129,7 @@ const actions = computed(() => [
 // 方法
 const getVideoUrl = (filePath) => {
   // 这里需要根据后端的静态文件服务配置来构建URL
-  return `http://127.0.0.1:8000/static/files/${props.video.id}/${props.video.original_filename}`
+  return `http://127.0.0.1:8000/static/files/${props.video.filename}`
 }
 
 const formatFileSize = (bytes) => {

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from fastapi import UploadFile, HTTPException
 from app.models.video_file import VideoFile
 from app.models.video_frame import VideoFrame
-from app.schemas.file_schemas import VideoFileCreate, VideoFileUpdate, FrameExtractionRequest
+from app.schemas.file_schemas import VideoFileCreate, VideoFileUpdate, FrameExtractionServiceRequest
+from app.utils.frame_extractor import VideoFrameExtractor
 
 class FileService:
     def __init__(self, db: Session):
@@ -106,7 +107,7 @@ class FileService:
         self.db.commit()
         return True
     
-    def extract_frames(self, request: FrameExtractionRequest) -> List[VideoFrame]:
+    def extract_frames(self, request: FrameExtractionServiceRequest) -> List[VideoFrame]:
         """提取视频帧"""
         video_file = self.get_video_file(request.video_file_id)
         if not video_file:
@@ -119,63 +120,104 @@ class FileService:
         video_frames_dir = os.path.join(self.frames_dir, f"video_{video_file.id}")
         os.makedirs(video_frames_dir, exist_ok=True)
         
-        # 使用OpenCV提取帧
-        cap = cv2.VideoCapture(video_file.file_path)
-        if not cap.isOpened():
-            raise HTTPException(status_code=400, detail="无法打开视频文件")
+        # 清理已存在的帧记录
+        existing_frames = self.db.query(VideoFrame).filter(
+            VideoFrame.video_file_id == video_file.id
+        ).all()
+        for frame in existing_frames:
+            if os.path.exists(frame.frame_path):
+                os.remove(frame.frame_path)
+            self.db.delete(frame)
         
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # 使用模块化的帧提取器
+        extractor = VideoFrameExtractor()
         
-        extracted_frames = []
-        frame_count = 0
-        
-        # 计算提取间隔
-        interval_frames = int(fps * request.interval) if request.interval else 1
+        # 准备提取参数
+        extraction_params = {
+            'interval': request.interval,
+            'max_frames': request.max_frames,
+            'frames_per_second': request.frames_per_second,
+            'threshold': 0.3  # 关键帧检测阈值
+        }
         
         try:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+            # 提取帧
+            frame_info_list = extractor.extract_frames(
+                video_file.file_path,
+                video_frames_dir,
+                request.extraction_method or "uniform",
+                **extraction_params
+            )
+            
+            # 创建数据库记录
+            extracted_frames = []
+            for frame_number, timestamp, frame_path in frame_info_list:
+                # 获取帧尺寸
+                frame_img = cv2.imread(frame_path)
+                height, width = frame_img.shape[:2] if frame_img is not None else (0, 0)
                 
-                # 按间隔提取帧
-                if frame_count % interval_frames == 0:
-                    timestamp = frame_count / fps
-                    frame_filename = f"frame_{frame_count:06d}.jpg"
-                    frame_path = os.path.join(video_frames_dir, frame_filename)
-                    
-                    # 保存帧图片
-                    cv2.imwrite(frame_path, frame)
-                    
-                    # 创建数据库记录
-                    db_frame = VideoFrame(
-                        video_file_id=video_file.id,
-                        frame_number=frame_count,
-                        timestamp=timestamp,
-                        frame_path=frame_path,
-                        width=frame.shape[1],
-                        height=frame.shape[0]
-                    )
-                    
-                    self.db.add(db_frame)
-                    extracted_frames.append(db_frame)
-                    
-                    # 检查最大帧数限制
-                    if request.max_frames and len(extracted_frames) >= request.max_frames:
-                        break
+                db_frame = VideoFrame(
+                    video_file_id=video_file.id,
+                    frame_number=frame_number,
+                    timestamp=timestamp,
+                    frame_path=frame_path,
+                    width=width,
+                    height=height
+                )
                 
-                frame_count += 1
-        
-        finally:
-            cap.release()
-        
-        self.db.commit()
-        return extracted_frames
+                self.db.add(db_frame)
+                extracted_frames.append(db_frame)
+            
+            self.db.commit()
+            return extracted_frames
+            
+        except Exception as e:
+            # 清理可能创建的文件
+            if os.path.exists(video_frames_dir):
+                for file in os.listdir(video_frames_dir):
+                    file_path = os.path.join(video_frames_dir, file)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+            raise HTTPException(status_code=500, detail=f"帧提取失败: {str(e)}")
     
     def get_video_frames(self, video_file_id: int) -> List[VideoFrame]:
         """获取视频的所有帧"""
         return self.db.query(VideoFrame).filter(VideoFrame.video_file_id == video_file_id).all()
+    
+    def delete_video_frames(self, video_file_id: int) -> int:
+        """删除视频对应的所有分割帧"""
+        # 获取所有相关的帧记录
+        frames = self.db.query(VideoFrame).filter(VideoFrame.video_file_id == video_file_id).all()
+        
+        deleted_count = 0
+        
+        # 删除物理文件和数据库记录
+        for frame in frames:
+            try:
+                # 删除物理文件
+                if os.path.exists(frame.frame_path):
+                    os.remove(frame.frame_path)
+                
+                # 删除数据库记录
+                self.db.delete(frame)
+                deleted_count += 1
+                
+            except Exception as e:
+                print(f"删除帧文件失败: {frame.frame_path}, 错误: {e}")
+                # 即使文件删除失败，也删除数据库记录
+                self.db.delete(frame)
+                deleted_count += 1
+        
+        # 尝试删除帧目录（如果为空）
+        try:
+            video_frames_dir = os.path.join(self.frames_dir, f"video_{video_file_id}")
+            if os.path.exists(video_frames_dir) and not os.listdir(video_frames_dir):
+                os.rmdir(video_frames_dir)
+        except Exception as e:
+            print(f"删除帧目录失败: {e}")
+        
+        self.db.commit()
+        return deleted_count
     
     def _get_video_info(self, file_path: str) -> dict:
         """获取视频信息"""

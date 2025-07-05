@@ -251,7 +251,7 @@ const fetchVideoDetail = async () => {
 
 const getVideoUrl = () => {
   if (!video.value) return ''
-  return `http://127.0.0.1:8000/static/files/${video.value.id}/${video.value.original_filename}`
+  return `http://127.0.0.1:8000/static/files/${video.value.filename}`
 }
 
 const formatFileSize = (bytes) => {

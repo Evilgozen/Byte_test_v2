@@ -58,11 +58,20 @@ class VideoFrameResponse(VideoFrameBase):
     class Config:
         from_attributes = True
 
-# Frame extraction request
+# Frame extraction request (for API input)
 class FrameExtractionRequest(BaseModel):
+    interval: Optional[float] = 1.0  # 提取间隔（秒）
+    max_frames: Optional[int] = None  # 最大帧数
+    extraction_method: Optional[str] = "uniform"  # 提取方法: uniform, keyframe, smart
+    frames_per_second: Optional[float] = None  # 每秒提取帧数（当method为uniform时使用）
+
+# Frame extraction request (for internal service)
+class FrameExtractionServiceRequest(BaseModel):
     video_file_id: int
     interval: Optional[float] = 1.0  # 提取间隔（秒）
     max_frames: Optional[int] = None  # 最大帧数
+    extraction_method: Optional[str] = "uniform"  # 提取方法
+    frames_per_second: Optional[float] = None  # 每秒提取帧数
 
 # Frame extraction response
 class FrameExtractionResponse(BaseModel):
