@@ -87,19 +87,16 @@ class ComparisonDetailResponse(ComparisonDetailBase):
     class Config:
         from_attributes = True
 
-# Query request/response schemas
-class StageQueryRequest(BaseModel):
-    video_file_id: int
-    stage_name: Optional[str] = None
+# SSIM Analysis schemas
+class SSIMAnalysisRequest(BaseModel):
+    frame_interval: int = 30
+    ssim_threshold: float = 0.75
 
-class StageQueryResponse(BaseModel):
-    stages: List[VideoStageResponse]
-    total_count: int
-
-class ComparisonQueryRequest(BaseModel):
-    comparison_id: Optional[int] = None
-    video_file_id: Optional[int] = None
-
-class ComparisonQueryResponse(BaseModel):
-    comparisons: List[VideoComparisonResponse]
-    total_count: int
+class SSIMAnalysisResponse(BaseModel):
+    video_id: int
+    total_keyframes: int
+    keyframes: List[dict]
+    stage_analysis: dict
+    saved_stages: List[dict]
+    ssim_threshold: float
+    frame_interval: int
