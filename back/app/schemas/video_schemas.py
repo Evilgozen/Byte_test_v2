@@ -100,3 +100,26 @@ class SSIMAnalysisResponse(BaseModel):
     saved_stages: List[dict]
     ssim_threshold: float
     frame_interval: int
+
+# Stage Matching schemas
+class StageMatchingRequest(BaseModel):
+    user_input: str
+    video_id: int
+
+class MatchedStage(BaseModel):
+    stage_id: int
+    stage_name: str
+    start_time: float
+    end_time: float
+    duration: float
+    description: Optional[str] = None
+    similarity_score: float
+    match_reason: str
+
+class StageMatchingResponse(BaseModel):
+    success: bool
+    user_input: str
+    video_id: int
+    matched_stages: List[MatchedStage]
+    total_matches: int
+    analysis_summary: str

@@ -27,6 +27,24 @@ const router = createRouter({
       props: true
     },
     {
+      path: '/videos/:id/analysis',
+      name: 'video-analysis',
+      component: () => import('../views/VideoAnalysisView.vue'),
+      props: true
+    },
+    {
+      path: '/videos/:id/keyframes',
+      name: 'video-keyframes',
+      component: () => import('../views/VideoKeyframesView.vue'),
+      props: true
+    },
+    {
+      path: '/videos/:id/segments',
+      name: 'video-segments',
+      component: () => import('../views/VideoSegmentsView.vue'),
+      props: true
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('../views/AboutView.vue'),

@@ -8,10 +8,13 @@
       >
         <template #extra>
           <a-space>
+            <a-button type="primary" @click="videoAnalysis">
+              <experiment-outlined /> 视频分析
+            </a-button>
             <a-button @click="editVideo">
               <edit-outlined /> 编辑
             </a-button>
-            <a-button type="primary" @click="extractFrames">
+            <a-button @click="extractFrames">
               <scissor-outlined /> 提取帧
             </a-button>
             <a-button @click="downloadVideo">
@@ -125,11 +128,20 @@
               <!-- 快速操作 -->
               <a-card title="快速操作" class="quick-actions-card">
                 <a-space direction="vertical" style="width: 100%">
-                  <a-button block type="primary" @click="extractFrames">
+                  <a-button block type="primary" @click="videoAnalysis">
+                    <experiment-outlined /> 视频分析
+                  </a-button>
+                  <a-button block @click="extractFrames">
                     <scissor-outlined /> 提取视频帧
                   </a-button>
                   <a-button block @click="viewFrames">
                     <picture-outlined /> 查看已提取的帧
+                  </a-button>
+                  <a-button block @click="viewKeyframes">
+                    <picture-outlined /> 查看关键帧
+                  </a-button>
+                  <a-button block @click="viewSegments">
+                    <block-outlined /> 查看分割帧
                   </a-button>
                   <a-button block @click="downloadVideo">
                     <download-outlined /> 下载视频文件
@@ -201,7 +213,9 @@ import {
   ScissorOutlined,
   DownloadOutlined,
   DeleteOutlined,
-  PictureOutlined
+  PictureOutlined,
+  ExperimentOutlined,
+  BlockOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useVideoStore } from '../stores/video'
@@ -263,10 +277,9 @@ const formatFileSize = (bytes) => {
 }
 
 const formatTime = (seconds) => {
-  if (!seconds) return '00:00'
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  if (!seconds) return '0ms'
+  const milliseconds = Math.round(seconds * 1000)
+  return `${milliseconds}ms`
 }
 
 const formatDateTime = (dateString) => {
@@ -315,6 +328,27 @@ const handleExtractSuccess = (result) => {
 const viewFrames = () => {
   router.push({ 
     name: 'video-frames', 
+    params: { id: props.id } 
+  })
+}
+
+const videoAnalysis = () => {
+  router.push({ 
+    name: 'video-analysis', 
+    params: { id: props.id } 
+  })
+}
+
+const viewKeyframes = () => {
+  router.push({ 
+    name: 'video-keyframes', 
+    params: { id: props.id } 
+  })
+}
+
+const viewSegments = () => {
+  router.push({ 
+    name: 'video-segments', 
     params: { id: props.id } 
   })
 }

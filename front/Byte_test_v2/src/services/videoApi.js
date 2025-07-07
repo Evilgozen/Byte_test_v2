@@ -53,5 +53,43 @@ export const videoApi = {
   // 获取帧图片
   getFrameImage(frameId) {
     return `http://127.0.0.1:8000//files/frames/${frameId}/image`
+  },
+
+  // 视频分析相关API
+  // SSIM视频分析
+  analyzeVideoWithSSIM(videoId, params = {}) {
+    const { frame_interval = 30, ssim_threshold = 0.75 } = params
+    return api.post(`/video-analysis/ssim-analysis/${videoId}?frame_interval=${frame_interval}&ssim_threshold=${ssim_threshold}`)
+  },
+
+  // 删除视频分析结果
+  deleteVideoAnalysis(videoId) {
+    return api.delete(`/video-analysis/analysis/${videoId}`)
+  },
+
+  // 获取视频阶段信息
+  getVideoStages(videoId) {
+    return api.get(`/video-analysis/video/${videoId}/stages`)
+  },
+
+  // 获取视频关键帧信息
+  getVideoKeyframes(videoId) {
+    return api.get(`/video-analysis/video/${videoId}/keyframes`)
+  },
+
+  // 阶段匹配相关API
+  // 阶段匹配分析
+  matchStages(data) {
+    return api.post('/stage-matching/match', data)
+  },
+
+  // 获取视频阶段摘要
+  getVideoStagesSummary(videoId) {
+    return api.get(`/stage-matching/video/${videoId}/stages-summary`)
+  },
+
+  // 批量阶段匹配
+  batchMatchStages(requests) {
+    return api.post('/stage-matching/batch-match', requests)
   }
 }
