@@ -111,12 +111,24 @@ class StageMatchingService:
 视频阶段信息:
 {stages_info}
 
+请参考以下示例格式分析视频的各个阶段：
+
+<example>
+视频总共包括4个阶段
+1. 从0~890ms:应用(APP启动、页面打开)启动
+2. 从1000ms~3000ms:登录完成
+3. 从3500ms~4000ms:打开一个会话(页面)
+4. 从3600ms~4100ms页面内容完成加载
+</example>
+
 请分析用户输入与各个阶段的相似度，并按照以下JSON格式返回结果：
 
 {{
   "matched_stages": [
     {{
       "stage_id": 阶段ID,
+      "start_time": 开始时间(秒),
+      "end_time": 结束时间(秒),
       "similarity_score": 相似度分数(0-1之间的浮点数),
       "match_reason": "匹配原因的详细说明"
     }}
@@ -130,6 +142,7 @@ class StageMatchingService:
 3. 按相似度分数从高到低排序
 4. 匹配原因要具体说明为什么这个阶段与用户输入相关
 5. 总结要简洁明了地说明匹配结果
+6. 返回结果中必须包含阶段的起始时间和结束时间
 
 请严格按照JSON格式返回，不要添加任何其他文字。
 """
@@ -151,12 +164,16 @@ class StageMatchingService:
                 stage_id = match.get("stage_id")
                 if stage_id in stage_dict:
                     stage = stage_dict[stage_id]
+                    # 使用AI返回的时间信息，如果没有则使用数据库中的时间
+                    ai_start_time = match.get("start_time", stage.start_time)
+                    ai_end_time = match.get("end_time", stage.end_time)
+                    
                     matched_stage = MatchedStage(
                         stage_id=stage.id,
                         stage_name=stage.stage_name,
-                        start_time=stage.start_time,
-                        end_time=stage.end_time,
-                        duration=stage.duration,
+                        start_time=ai_start_time,
+                        end_time=ai_end_time,
+                        duration=ai_end_time - ai_start_time,
                         description=stage.description,
                         similarity_score=match.get("similarity_score", 0.0),
                         match_reason=match.get("match_reason", "")

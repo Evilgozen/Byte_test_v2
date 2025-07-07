@@ -121,6 +121,7 @@ class SSIMVideoAnalysisService:
         try:
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            video_duration = total_frames / fps  # 视频总时长（秒）
             
             keyframes_info = []
             prev_frame = None
@@ -159,6 +160,24 @@ class SSIMVideoAnalysisService:
                         })
                         prev_frame = current_frame
                         last_keyframe_index = i
+            
+            # 处理最后一个阶段：如果最后一个关键帧不是视频结尾，添加结束帧
+            if len(keyframes_info) > 0 and last_keyframe_index < total_frames - frame_interval:
+                # 读取最后一帧
+                cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames - 1)
+                ret, last_frame = cap.read()
+                if ret:
+                    # 计算与最后一个关键帧的相似度
+                    last_similarity = self._calculate_ssim(prev_frame, last_frame)
+                    
+                    # 添加视频结束帧作为最后阶段的结束点
+                    keyframes_info.append({
+                        "frame_number": total_frames - 1,
+                        "timestamp": video_duration,
+                        "frame_data": last_frame,
+                        "ssim_score": last_similarity,
+                        "is_end_frame": True  # 标记为结束帧
+                    })
             
             return keyframes_info
             
@@ -243,10 +262,14 @@ class SSIMVideoAnalysisService:
         
         # 添加文本提示
         frame_times_str = ', '.join([f'{kf["timestamp"]*1000:.0f}ms' for kf in keyframes_info])
+        video_end_time = keyframes_info[-1]['timestamp'] * 1000  # 视频结束时间（毫秒）
+        
         prompt_text = f"""你是一个QA，你的任务是对给定视频的关键帧进行阶段分析。首先，请仔细阅读以下视频关键帧的时间点：
 <frame_times>
 {frame_times_str}
 </frame_times>
+
+视频总时长: {video_end_time:.0f}ms
 
 接下来，请查看从视频中提取的关键帧：
 <video_frames>
@@ -259,13 +282,18 @@ class SSIMVideoAnalysisService:
 1. 从0~890ms:应用(APP启动、页面打开)启动
 2. 从1000ms~3000ms:登录完成
 3. 从3500ms~4000ms:打开一个会话(页面)
-4. 从3600ms~4100ms页面内容完成加载
+4. 从3600ms~{video_end_time:.0f}ms:页面内容完成加载（最后阶段延续到视频结尾）
 </example>
+
+重要提示：
+1. 最后一个阶段必须延续到视频结尾时间({video_end_time:.0f}ms)
+2. 每个阶段都应该有明确的开始和结束时间
+3. 阶段之间不应该有时间间隙
 
 最后，请严格按照以下JSON格式返回结果，不要添加任何其他文字：
 {{
   "stage": ["阶段1", "阶段2", "阶段3"],
-  "time": ["开始时间1~结束时间1", "开始时间2~结束时间2", "开始时间3~结束时间3"],
+  "time": ["开始时间1~结束时间1", "开始时间2~结束时间2", "开始时间3~{video_end_time:.0f}ms"],
   "description": ["阶段1描述", "阶段2描述", "阶段3描述"]
 }}"""
         
@@ -321,6 +349,17 @@ class SSIMVideoAnalysisService:
         times = stage_analysis.get("time", [])
         descriptions = stage_analysis.get("description", [])
         
+        # 获取视频文件信息以确定视频总时长
+        video_file = self.video_file_service.get_video_file(video_id)
+        video_duration = None
+        if video_file and os.path.exists(video_file.file_path):
+            cap = cv2.VideoCapture(video_file.file_path)
+            if cap.isOpened():
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                video_duration = total_frames / fps
+                cap.release()
+        
         for i, (stage_name, time_range, description) in enumerate(zip(stages, times, descriptions)):
             # 解析时间范围
             try:
@@ -335,7 +374,20 @@ class SSIMVideoAnalysisService:
                 start_time = 0.0
                 end_time = 1.0
             
+            # 特殊处理最后一个阶段：确保结束时间不会是0ms持续时间
+            if i == len(stages) - 1 and video_duration is not None:
+                # 如果是最后一个阶段，确保结束时间是视频总时长
+                if end_time <= start_time:
+                    end_time = video_duration
+                # 确保最后阶段至少延续到视频结尾
+                end_time = max(end_time, video_duration)
+            
             duration = end_time - start_time
+            
+            # 确保持续时间不为0或负数
+            if duration <= 0:
+                duration = 0.1  # 最小持续时间100ms
+                end_time = start_time + duration
             
             # 保存到数据库
             db_stage = VideoStage(
