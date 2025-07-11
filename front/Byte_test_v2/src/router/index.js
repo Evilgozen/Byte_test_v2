@@ -39,10 +39,9 @@ const router = createRouter({
       props: true
     },
     {
-      path: '/videos/:id/segments',
-      name: 'video-segments',
-      component: () => import('../views/VideoSegmentsView.vue'),
-      props: true
+      path: '/rag-analysis',
+      name: 'rag-analysis',
+      component: () => import('../views/RAGAnalysisView.vue')
     },
     {
       path: '/about',

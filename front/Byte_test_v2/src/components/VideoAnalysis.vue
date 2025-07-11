@@ -4,6 +4,17 @@
       <!-- 分析参数配置 -->
       <div class="analysis-config">
         <a-form layout="inline" :model="analysisParams">
+          <a-form-item label="产品名称" required>
+            <a-input
+              v-model:value="analysisParams.product_name"
+              placeholder="请输入产品名称"
+              style="width: 150px"
+            />
+            <a-tooltip title="产品名称用于向量存储的元数据，便于后续RAG分析">
+              <question-circle-outlined style="margin-left: 8px; color: #999" />
+            </a-tooltip>
+          </a-form-item>
+          
           <a-form-item label="帧间隔">
             <a-input-number
               v-model:value="analysisParams.frame_interval"
@@ -135,18 +146,23 @@
           <h4>关键帧信息</h4>
           <div class="keyframes-summary">
             <a-row :gutter="16">
-              <a-col :span="12">
+              <a-col :span="8">
                 <a-statistic
                   title="关键帧总数"
                   :value="keyframes.length"
                   :value-style="{ color: '#1890ff' }"
                 />
               </a-col>
-              <a-col :span="12">
+              <a-col :span="16">
                 <div class="keyframes-action">
-                  <a-button type="primary" @click="viewAllKeyframes">
-                    <picture-outlined /> 查看关键帧
-                  </a-button>
+                  <a-space>
+                    <a-button type="primary" @click="viewAllKeyframes">
+                      <picture-outlined /> 查看关键帧
+                    </a-button>
+                    <a-button type="default" @click="goToRAGAnalysis">
+                      <search-outlined /> RAG智能分析
+                    </a-button>
+                  </a-space>
                 </div>
               </a-col>
             </a-row>
@@ -170,15 +186,19 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   PlayCircleOutlined,
   DeleteOutlined,
   QuestionCircleOutlined,
   ClockCircleOutlined,
-  PictureOutlined
+  PictureOutlined,
+  SearchOutlined
 } from '@ant-design/icons-vue'
 import { videoApi } from '../services/videoApi'
+
+const router = useRouter()
 
 const props = defineProps({
   videoId: {
@@ -198,6 +218,7 @@ const keyframes = ref([])
 const error = ref(null)
 
 const analysisParams = ref({
+  product_name: '',
   frame_interval: 30,
   ssim_threshold: 0.75
 })
@@ -211,6 +232,11 @@ const hasAnalysisResult = computed(() => {
 const startAnalysis = async () => {
   if (!props.videoId) {
     message.error('请先选择视频')
+    return
+  }
+  
+  if (!analysisParams.value.product_name.trim()) {
+    message.error('请输入产品名称')
     return
   }
   
@@ -309,6 +335,10 @@ const getStageColor = (index) => {
 
 const viewAllKeyframes = () => {
   emit('view-keyframes')
+}
+
+const goToRAGAnalysis = () => {
+  router.push('/rag-analysis')
 }
 
 // 监听videoId变化，自动加载已有的分析结果

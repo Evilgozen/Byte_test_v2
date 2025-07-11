@@ -14,9 +14,7 @@
             <a-button @click="editVideo">
               <edit-outlined /> 编辑
             </a-button>
-            <a-button @click="extractFrames">
-              <scissor-outlined /> 提取帧
-            </a-button>
+
             <a-button @click="downloadVideo">
               <download-outlined /> 下载
             </a-button>
@@ -131,17 +129,11 @@
                   <a-button block type="primary" @click="videoAnalysis">
                     <experiment-outlined /> 视频分析
                   </a-button>
-                  <a-button block @click="extractFrames">
-                    <scissor-outlined /> 提取视频帧
-                  </a-button>
-                  <a-button block @click="viewFrames">
-                    <picture-outlined /> 查看已提取的帧
+                  <a-button block @click="ragAnalysis">
+                    <robot-outlined /> RAG智能分析
                   </a-button>
                   <a-button block @click="viewKeyframes">
                     <picture-outlined /> 查看关键帧
-                  </a-button>
-                  <a-button block @click="viewSegments">
-                    <block-outlined /> 查看分割帧
                   </a-button>
                   <a-button block @click="downloadVideo">
                     <download-outlined /> 下载视频文件
@@ -196,12 +188,7 @@
       </a-form>
     </a-modal>
 
-    <!-- 帧提取对话框 -->
-    <frame-extract-modal
-      v-model:open="extractModalVisible"
-      :video="video"
-      @extract-success="handleExtractSuccess"
-    />
+
   </div>
 </template>
 
@@ -210,16 +197,15 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   EditOutlined,
-  ScissorOutlined,
   DownloadOutlined,
   DeleteOutlined,
   PictureOutlined,
   ExperimentOutlined,
-  BlockOutlined
+  RobotOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useVideoStore } from '../stores/video'
-import FrameExtractModal from '../components/FrameExtractModal.vue'
+
 import dayjs from 'dayjs'
 
 const props = defineProps({
@@ -237,7 +223,7 @@ const videoStore = useVideoStore()
 const videoRef = ref()
 const currentTime = ref(0)
 const editModalVisible = ref(false)
-const extractModalVisible = ref(false)
+
 const editFormRef = ref()
 const updating = ref(false)
 
@@ -313,30 +299,17 @@ const cancelEdit = () => {
   editForm.value.description = ''
 }
 
-const extractFrames = () => {
-  extractModalVisible.value = true
-}
 
-const handleExtractSuccess = (result) => {
-  console.log('Extract success:', result)
-  router.push({ 
-    name: 'video-frames', 
-    params: { id: props.id } 
-  })
-}
-
-const viewFrames = () => {
-  router.push({ 
-    name: 'video-frames', 
-    params: { id: props.id } 
-  })
-}
 
 const videoAnalysis = () => {
   router.push({ 
     name: 'video-analysis', 
     params: { id: props.id } 
   })
+}
+
+const ragAnalysis = () => {
+  router.push({ name: 'rag-analysis' })
 }
 
 const viewKeyframes = () => {
@@ -346,12 +319,7 @@ const viewKeyframes = () => {
   })
 }
 
-const viewSegments = () => {
-  router.push({ 
-    name: 'video-segments', 
-    params: { id: props.id } 
-  })
-}
+
 
 const downloadVideo = async () => {
   try {

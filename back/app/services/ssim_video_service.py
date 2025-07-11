@@ -8,11 +8,16 @@ from sqlalchemy.orm import Session
 from skimage.metrics import structural_similarity as ssim
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 from app.models.video_file import VideoFile
 from app.models.video_frame import VideoFrame
 from app.models.video_stage import VideoStage
 from app.services.video_service import VideoFileService, VideoStageService
+from app.services.video_rag_service import VideoRAGService
 
 
 class SSIMVideoAnalysisService:
@@ -22,20 +27,22 @@ class SSIMVideoAnalysisService:
         self.db = db
         self.video_file_service = VideoFileService(db)
         self.video_stage_service = VideoStageService(db)
+        self.rag_service = VideoRAGService(db)
         
         # 初始化LangChain ChatOpenAI客户端
         self.llm = ChatOpenAI(
-            model_name="doubao-1-5-vision-pro-250328",
-            openai_api_key="6e0538ce-25b8-4f61-9342-505879befdda",
-            openai_api_base="https://ark.cn-beijing.volces.com/api/v3",
+            model_name=os.getenv("ARK_MODEL", "doubao-1-5-vision-pro-250328"),
+            openai_api_key=os.getenv("ARK_API_KEY"),
+            openai_api_base=os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
         )
     
-    def analyze_video_with_ssim(self, video_id: int, frame_interval: int = 30, 
-                               ssim_threshold: float = 0.75) -> Dict[str, Any]:
+    def analyze_video_with_ssim(self, video_id: int, product_name: str, 
+                               frame_interval: int = 30, ssim_threshold: float = 0.75) -> Dict[str, Any]:
         """使用SSIM分析视频并生成阶段信息
         
         Args:
             video_id: 视频文件ID
+            product_name: 产品名称（用于向量存储的metadata）
             frame_interval: 帧间隔（多少帧检测一次）
             ssim_threshold: SSIM阈值
             
@@ -64,12 +71,17 @@ class SSIMVideoAnalysisService:
         # 保存阶段信息到数据库
         saved_stages = self._save_stages_to_db(video_id, stage_analysis)
         
+        # 存储到向量数据库
+        rag_result = self.rag_service.store_video_analysis(video_id, product_name, stage_analysis)
+        
         return {
             "video_id": video_id,
+            "product_name": product_name,
             "total_keyframes": len(saved_frames),
             "keyframes": saved_frames,
             "stage_analysis": stage_analysis,
             "saved_stages": saved_stages,
+            "rag_storage": rag_result,
             "ssim_threshold": ssim_threshold,
             "frame_interval": frame_interval
         }
@@ -104,10 +116,14 @@ class SSIMVideoAnalysisService:
         
         self.db.commit()
         
+        # 从向量数据库中删除
+        rag_delete_result = self.rag_service.delete_video_analysis_from_vector_store(video_id)
+        
         return {
             "video_id": video_id,
             "deleted_frames": frames_count,
             "deleted_stages": stages_count,
+            "rag_deletion": rag_delete_result,
             "message": f"成功删除视频 {video_id} 的分析结果"
         }
     
@@ -413,3 +429,32 @@ class SSIMVideoAnalysisService:
         
         self.db.commit()
         return saved_stages
+    
+    def query_similar_video_stages(self, query: str, product_name: Optional[str] = None, 
+                                  k: int = 5, similarity_threshold: float = 0.7) -> Dict[str, Any]:
+        """查询相似的视频阶段分析
+        
+        Args:
+            query: 查询文本
+            product_name: 产品名称过滤（可选）
+            k: 返回结果数量
+            similarity_threshold: 相似度阈值，只返回相似度大于此值的结果
+            
+        Returns:
+            查询结果
+        """
+        return self.rag_service.query_similar_stages(query, product_name, k, similarity_threshold)
+    
+    def generate_stage_comparison_report(self, query: str, product_name: Optional[str] = None, 
+                                        similarity_threshold: float = 0.7) -> Dict[str, Any]:
+        """生成阶段对比分析报告
+        
+        Args:
+            query: 查询描述
+            product_name: 产品名称过滤
+            similarity_threshold: 相似度阈值，只使用相似度大于此值的结果生成报告
+            
+        Returns:
+            生成的报告
+        """
+        return self.rag_service.generate_comparison_report(query, product_name, similarity_threshold)

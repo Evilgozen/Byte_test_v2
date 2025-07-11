@@ -4,7 +4,8 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   VideoCameraOutlined,
   PlayCircleOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  RobotOutlined
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -19,6 +20,8 @@ watch(
       selectedKeys.value = ['home']
     } else if (newPath.startsWith('/videos')) {
       selectedKeys.value = ['videos']
+    } else if (newPath === '/rag-analysis') {
+      selectedKeys.value = ['rag-analysis']
     } else if (newPath === '/about') {
       selectedKeys.value = ['about']
     } else {
@@ -49,6 +52,10 @@ watch(
         <a-menu-item key="videos" @click="$router.push('/videos')">
           <play-circle-outlined />
           视频管理
+        </a-menu-item>
+        <a-menu-item key="rag-analysis" @click="$router.push('/rag-analysis')">
+          <robot-outlined />
+          RAG分析
         </a-menu-item>
         <a-menu-item key="about" @click="$router.push('/about')">
           <info-circle-outlined />

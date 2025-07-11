@@ -17,9 +17,6 @@
             <a-button @click="viewKeyframes">
               <picture-outlined /> 关键帧
             </a-button>
-            <a-button @click="viewSegments">
-              <block-outlined /> 分割帧
-            </a-button>
           </a-space>
         </template>
       </a-page-header>
@@ -170,8 +167,7 @@ import {
   EyeOutlined,
   ClockCircleOutlined,
   PlayCircleOutlined,
-  PictureOutlined,
-  BlockOutlined
+  PictureOutlined
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useVideoStore } from '../stores/video'
@@ -249,9 +245,7 @@ const viewKeyframes = () => {
   router.push({ name: 'video-keyframes', params: { id: props.id } })
 }
 
-const viewSegments = () => {
-  router.push({ name: 'video-segments', params: { id: props.id } })
-}
+
 
 const handleAnalysisComplete = (result) => {
   console.log('Analysis completed:', result)

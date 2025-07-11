@@ -58,8 +58,13 @@ export const videoApi = {
   // 视频分析相关API
   // SSIM视频分析
   analyzeVideoWithSSIM(videoId, params = {}) {
-    const { frame_interval = 30, ssim_threshold = 0.75 } = params
-    return api.post(`/video-analysis/ssim-analysis/${videoId}?frame_interval=${frame_interval}&ssim_threshold=${ssim_threshold}`)
+    const { product_name, frame_interval = 30, ssim_threshold = 0.75 } = params
+    const queryParams = new URLSearchParams({
+      product_name,
+      frame_interval: frame_interval.toString(),
+      ssim_threshold: ssim_threshold.toString()
+    })
+    return api.post(`/video-analysis/ssim-analysis/${videoId}?${queryParams}`)
   },
 
   // 删除视频分析结果
@@ -91,5 +96,33 @@ export const videoApi = {
   // 批量阶段匹配
   batchMatchStages(requests) {
     return api.post('/stage-matching/batch-match', requests)
+  },
+
+  // RAG分析相关API
+  // 查询相似视频阶段
+  querySimilarStages(params = {}) {
+    const { query, product_name, k = 5, similarity_threshold = 0.7 } = params
+    const queryParams = new URLSearchParams({
+      query,
+      k: k.toString(),
+      similarity_threshold: similarity_threshold.toString()
+    })
+    if (product_name) {
+      queryParams.append('product_name', product_name)
+    }
+    return api.post(`/video-analysis/rag/query-similar-stages?${queryParams}`)
+  },
+
+  // 生成阶段对比报告
+  generateComparisonReport(params = {}) {
+    const { query, product_name, similarity_threshold = 0.7 } = params
+    const queryParams = new URLSearchParams({
+      query,
+      similarity_threshold: similarity_threshold.toString()
+    })
+    if (product_name) {
+      queryParams.append('product_name', product_name)
+    }
+    return api.post(`/video-analysis/rag/generate-comparison-report?${queryParams}`)
   }
 }

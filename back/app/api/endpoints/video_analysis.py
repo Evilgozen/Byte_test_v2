@@ -12,6 +12,7 @@ router = APIRouter(prefix="/video-analysis", tags=["视频分析"])
 @router.post("/ssim-analysis/{video_id}", summary="SSIM视频分析")
 def analyze_video_with_ssim(
     video_id: int,
+    product_name: str = Query(..., description="产品名称（用于向量存储的元数据）"),
     frame_interval: int = Query(30, ge=1, le=300, description="帧间隔（多少帧检测一次，默认30帧）"),
     ssim_threshold: float = Query(0.75, ge=0.1, le=0.99, description="SSIM阈值（默认0.75）"),
     db: Session = Depends(get_db)
@@ -38,6 +39,7 @@ def analyze_video_with_ssim(
         ssim_service = SSIMVideoAnalysisService(db)
         result = ssim_service.analyze_video_with_ssim(
             video_id=video_id,
+            product_name=product_name,
             frame_interval=frame_interval,
             ssim_threshold=ssim_threshold
         )
@@ -185,3 +187,78 @@ def get_video_keyframes(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取关键帧信息时发生错误: {str(e)}")
+
+
+@router.post("/rag/query-similar-stages", summary="查询相似视频阶段")
+def query_similar_video_stages(
+    query: str = Query(..., description="查询描述"),
+    product_name: str = Query(None, description="产品名称过滤（可选）"),
+    k: int = Query(5, ge=1, le=20, description="返回结果数量（默认5）"),
+    similarity_threshold: float = Query(0.7, ge=0.0, le=1.0, description="相似度阈值（默认0.7）"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    基于RAG查询相似的视频阶段分析
+    
+    参数:
+    - query: 查询描述文本
+    - product_name: 产品名称过滤（可选）
+    - k: 返回结果数量
+    - similarity_threshold: 相似度阈值，只返回相似度大于此值的结果
+    
+    返回:
+    - 相似阶段的分析结果，包含视频ID和阶段ID
+    """
+    try:
+        ssim_service = SSIMVideoAnalysisService(db)
+        result = ssim_service.query_similar_video_stages(
+            query=query,
+            product_name=product_name,
+            k=k,
+            similarity_threshold=similarity_threshold
+        )
+        
+        return {
+            "success": True,
+            "message": "相似阶段查询完成",
+            "data": result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查询过程中发生错误: {str(e)}")
+
+
+@router.post("/rag/generate-comparison-report", summary="生成阶段对比报告")
+def generate_stage_comparison_report(
+    query: str = Query(..., description="查询描述"),
+    product_name: str = Query(None, description="产品名称过滤（可选）"),
+    similarity_threshold: float = Query(0.7, ge=0.0, le=1.0, description="相似度阈值（默认0.7）"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    生成基于RAG的阶段对比分析报告
+    
+    参数:
+    - query: 查询描述文本
+    - product_name: 产品名称过滤（可选）
+    - similarity_threshold: 相似度阈值，只使用相似度大于此值的结果生成报告
+    
+    返回:
+    - 生成的对比分析报告
+    """
+    try:
+        ssim_service = SSIMVideoAnalysisService(db)
+        result = ssim_service.generate_stage_comparison_report(
+            query=query,
+            product_name=product_name,
+            similarity_threshold=similarity_threshold
+        )
+        
+        return {
+            "success": True,
+            "message": "对比报告生成完成",
+            "data": result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"报告生成过程中发生错误: {str(e)}")

@@ -16,3 +16,8 @@ langchain-community>=0.0.20
 pillow>=10.0.0
 typing-extensions>=4.0.0
 openai>=1.0.0
+
+# RAG和向量数据库相关依赖
+langchain-chroma>=0.1.0
+chromadb>=0.4.0
+volcengine>=1.0.0

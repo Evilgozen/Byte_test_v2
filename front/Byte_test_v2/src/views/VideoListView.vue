@@ -76,7 +76,6 @@
               >
                 <video-card
                   :video="video"
-                  @extract-frames="handleExtractFrames"
                   @delete-success="handleDeleteSuccess"
                 />
               </a-col>
@@ -100,12 +99,7 @@
       </a-card>
     </div>
 
-    <!-- 帧提取对话框 -->
-    <frame-extract-modal
-      v-model:open="extractModalVisible"
-      :video="selectedVideo"
-      @extract-success="handleExtractSuccess"
-    />
+
   </div>
 </template>
 
@@ -117,7 +111,7 @@ import { Empty } from 'ant-design-vue'
 import { useVideoStore } from '../stores/video'
 import VideoUpload from '../components/VideoUpload.vue'
 import VideoCard from '../components/VideoCard.vue'
-import FrameExtractModal from '../components/FrameExtractModal.vue'
+
 
 const router = useRouter()
 const videoStore = useVideoStore()
@@ -127,8 +121,7 @@ const searchKeyword = ref('')
 const sortBy = ref('created_at_desc')
 const currentPage = ref(1)
 const pageSize = ref(12)
-const extractModalVisible = ref(false)
-const selectedVideo = ref(null)
+
 
 // 计算属性
 const loading = computed(() => videoStore.loading)
@@ -209,19 +202,7 @@ const handlePageSizeChange = (current, size) => {
   pageSize.value = size
 }
 
-const handleExtractFrames = (video) => {
-  selectedVideo.value = video
-  extractModalVisible.value = true
-}
 
-const handleExtractSuccess = (result) => {
-  console.log('Extract success:', result)
-  // 可以跳转到帧列表页面
-  router.push({ 
-    name: 'video-frames', 
-    params: { id: selectedVideo.value.id } 
-  })
-}
 
 const handleDeleteSuccess = (videoId) => {
   console.log('Delete success:', videoId)

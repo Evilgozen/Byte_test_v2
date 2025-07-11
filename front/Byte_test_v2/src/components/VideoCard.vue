@@ -69,9 +69,7 @@
         <a-button type="primary" size="small" @click="viewDetail">
           <eye-outlined /> 查看详情
         </a-button>
-        <a-button size="small" @click="extractFrames">
-          <scissor-outlined /> 提取帧
-        </a-button>
+
         <a-button size="small" @click="downloadVideo">
           <download-outlined /> 下载
         </a-button>
@@ -95,7 +93,6 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   EyeOutlined,
-  ScissorOutlined,
   DownloadOutlined,
   DeleteOutlined,
   VideoCameraOutlined
@@ -122,7 +119,6 @@ const videoDescription = computed(() => {
 
 const actions = computed(() => [
   { key: 'detail', icon: 'EyeOutlined', text: '详情' },
-  { key: 'frames', icon: 'ScissorOutlined', text: '帧提取' },
   { key: 'download', icon: 'DownloadOutlined', text: '下载' }
 ])
 
@@ -151,9 +147,7 @@ const viewDetail = () => {
   router.push({ name: 'video-detail', params: { id: props.video.id } })
 }
 
-const extractFrames = () => {
-  emit('extract-frames', props.video)
-}
+
 
 const downloadVideo = async () => {
   try {
