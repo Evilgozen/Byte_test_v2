@@ -458,3 +458,17 @@ class SSIMVideoAnalysisService:
             生成的报告
         """
         return self.rag_service.generate_comparison_report(query, product_name, similarity_threshold)
+    
+    def generate_stage_comparison_report_stream(self, query: str, product_name: Optional[str] = None, 
+                                              similarity_threshold: float = 0.7):
+        """流式生成阶段对比分析报告
+        
+        Args:
+            query: 查询描述
+            product_name: 产品名称过滤
+            similarity_threshold: 相似度阈值，只使用相似度大于此值的结果生成报告
+            
+        Yields:
+            流式返回的报告内容
+        """
+        return self.rag_service.generate_comparison_report_stream(query, product_name, similarity_threshold)

@@ -318,6 +318,90 @@ class VideoRAGService:
                 "message": f"报告生成失败: {str(e)}"
             }
     
+    def generate_comparison_report_stream(self, query: str, product_name: Optional[str] = None, similarity_threshold: float = 0.7):
+        """流式生成对比分析报告
+        
+        Args:
+            query: 查询描述
+            product_name: 产品名称过滤
+            similarity_threshold: 相似度阈值，只使用相似度大于此值的结果生成报告
+            
+        Yields:
+            流式返回的报告内容
+        """
+        try:
+            # 查询相似阶段，使用相似度阈值过滤
+            similar_results = self.query_similar_stages(query, product_name, k=10, similarity_threshold=similarity_threshold)
+            
+            if not similar_results["success"] or not similar_results["results"]:
+                yield f"data: {json.dumps({'error': '未找到相关的分析结果'}, ensure_ascii=False)}\n\n"
+                return
+            
+            # 发送初始信息
+            initial_data = {
+                "type": "init",
+                "query": query,
+                "source_count": len(similar_results["results"]),
+                "sources": similar_results["results"]
+            }
+            yield f"data: {json.dumps(initial_data, ensure_ascii=False)}\n\n"
+            
+            # 构建上下文
+            context_parts = []
+            for result in similar_results["results"]:
+                context_parts.append(
+                    f"视频: {result['video_filename']} (ID: {result['video_id']})\n"
+                    f"产品: {result['product_name']}\n"
+                    f"阶段: {result['stage_name']} ({result['time_range']})\n"
+                    f"内容: {result['content']}\n"
+                )
+            
+            context = "\n---\n".join(context_parts)
+            
+            # 构建prompt
+            prompt = ChatPromptTemplate.from_template(
+                """你是一个视频分析专家，请基于以下相关的视频阶段分析结果，生成一份对比分析报告。
+
+查询需求: {query}
+
+相关分析结果:
+{context}
+
+请生成一份详细的对比分析报告，包括：
+1. 相似场景总结
+2. 不同产品/视频的表现对比
+3. 时间效率分析
+4. 关键发现和建议
+
+报告:"""
+            )
+            
+            # 流式生成报告
+            messages = prompt.invoke({"query": query, "context": context})
+            
+            # 使用流式调用
+            for chunk in self.llm.stream(messages):
+                if chunk.content:
+                    chunk_data = {
+                        "type": "content",
+                        "content": chunk.content
+                    }
+                    yield f"data: {json.dumps(chunk_data, ensure_ascii=False)}\n\n"
+            
+            # 发送完成信号
+            complete_data = {
+                "type": "complete"
+            }
+            yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
+            
+        except Exception as e:
+            error_data = {
+                "type": "error",
+                "error": str(e),
+                "message": f"报告生成失败: {str(e)}"
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+    
     def delete_video_analysis_from_vector_store(self, video_id: int, product_name: Optional[str] = None) -> Dict[str, Any]:
         """从向量数据库中删除视频分析数据
         

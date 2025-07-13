@@ -45,17 +45,7 @@ def check_vector_database():
         except Exception as e:
             print(f"❌ 查询所有数据失败: {str(e)}")
         
-        # 检查特定产品的数据
-        print("\n2. 检查'飞书'产品的数据...")
-        try:
-            feishu_result = rag_service.query_similar_stages(
-                query="任意查询",
-                product_name="飞书",
-                k=10
-            )
-            print(f"飞书产品查询结果: {json.dumps(feishu_result, ensure_ascii=False, indent=2)}")
-        except Exception as e:
-            print(f"❌ 查询飞书数据失败: {str(e)}")
+        # 飞书相关测试已删除
         
         # 检查特定视频ID的数据
         print("\n3. 检查视频ID=2的数据...")

@@ -5,6 +5,7 @@ from typing import Dict, Any
 from app.db.database import get_db
 from app.services.ssim_video_service import SSIMVideoAnalysisService
 from app.services.video_service import VideoFileService
+from app.services.simple_feishu_service import SimpleFeishuService
 
 router = APIRouter(prefix="/video-analysis", tags=["视频分析"])
 
@@ -262,3 +263,89 @@ def generate_stage_comparison_report(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"报告生成过程中发生错误: {str(e)}")
+
+
+@router.post("/rag/generate-comparison-report-stream", summary="流式生成阶段对比报告")
+def generate_stage_comparison_report_stream(
+    query: str = Query(..., description="查询描述"),
+    product_name: str = Query(None, description="产品名称过滤（可选）"),
+    similarity_threshold: float = Query(0.7, ge=0.0, le=1.0, description="相似度阈值（默认0.7）"),
+    db: Session = Depends(get_db)
+):
+    """
+    流式生成基于RAG的阶段对比分析报告
+    
+    参数:
+    - query: 查询描述文本
+    - product_name: 产品名称过滤（可选）
+    - similarity_threshold: 相似度阈值，只使用相似度大于此值的结果生成报告
+    
+    返回:
+    - Server-Sent Events (SSE) 流式响应
+    """
+    from fastapi.responses import StreamingResponse
+    
+    def generate():
+        try:
+            ssim_service = SSIMVideoAnalysisService(db)
+            rag_service = ssim_service.rag_service
+            
+            for chunk in rag_service.generate_comparison_report_stream(
+                query=query,
+                product_name=product_name,
+                similarity_threshold=similarity_threshold
+            ):
+                yield chunk
+                
+        except Exception as e:
+            import json
+            error_data = {
+                "type": "error",
+                "error": str(e),
+                "message": f"报告生成过程中发生错误: {str(e)}"
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
+
+@router.post("/feishu/create-document", summary="创建飞书文档")
+def create_feishu_document(
+    title: str = Query(..., description="文档标题"),
+    content: str = Query(..., description="文档内容")
+) -> Dict[str, Any]:
+    """
+    创建飞书文档并添加内容
+    
+    参数:
+    - title: 文档标题
+    - content: 文档内容
+    
+    返回:
+    - 包含文档ID和文档URL的结果
+    """
+    try:
+        feishu_service = SimpleFeishuService()
+        result = feishu_service.create_document_with_content(title, content)
+        
+        return {
+            "success": result["success"],
+            "message": result["message"],
+            "data": {
+                "document_id": result.get("document_id"),
+                "document_url": result.get("document_url")
+            } if result["success"] else None,
+            "error": result.get("error") if not result["success"] else None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建飞书文档时发生错误: {str(e)}")

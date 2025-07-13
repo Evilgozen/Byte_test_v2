@@ -68,6 +68,14 @@
                   >
                     <file-text-outlined /> 生成对比报告
                   </a-button>
+                  <a-button 
+                    type="primary" 
+                    :loading="streamGenerating" 
+                    @click="generateReportStream"
+                    :disabled="!queryParams.query.trim()"
+                  >
+                    <file-text-outlined /> 流式生成报告
+                  </a-button>
                 </a-space>
               </a-form-item>
             </a-col>
@@ -124,35 +132,28 @@
         </div>
       </div>
       
-      <!-- 对比报告 -->
-      <div v-if="comparisonReport" class="comparison-report">
-        <a-divider>阶段对比分析报告</a-divider>
-        
-        <a-card title="AI分析报告" class="report-card">
-          <div class="report-content" v-html="formatReport(comparisonReport.report)"></div>
-          
-          <template #extra>
-            <a-space>
-              <a-button size="small" @click="copyReport">
-                <copy-outlined /> 复制报告
-              </a-button>
-              <a-button size="small" @click="downloadReport">
-                <download-outlined /> 下载报告
-              </a-button>
-            </a-space>
-          </template>
-        </a-card>
-        
-        <div v-if="comparisonReport.similar_stages && comparisonReport.similar_stages.length > 0" class="report-stages">
-          <h4>参考阶段数据</h4>
-          <a-table 
-            :columns="reportTableColumns"
-            :data-source="comparisonReport.similar_stages"
-            size="small"
-            :pagination="false"
-          />
-        </div>
-      </div>
+      <!-- 流式生成状态组件 -->
+      <StreamStatus
+        :stream-generating="streamGenerating"
+        :stream-report="streamReport"
+        :stream-status="streamStatus"
+        :stream-progress="streamProgress"
+        @stop-generation="stopStreamGeneration"
+      />
+
+      <!-- 报告卡片组件 -->
+      <ReportCard
+        ref="reportCardRef"
+        :comparison-report="comparisonReport"
+        :stream-report="streamReport"
+        :stream-generating="streamGenerating"
+        :stream-status="streamStatus"
+        :stream-progress="streamProgress"
+        :report-table-columns="reportTableColumns"
+        @stop-generation="stopStreamGeneration"
+        @copy-report="copyReport"
+        @download-report="downloadReport"
+      />
       
       <!-- 错误信息 -->
       <div v-if="error" class="error-section">
@@ -169,7 +170,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -179,14 +180,22 @@ import {
   DownloadOutlined
 } from '@ant-design/icons-vue'
 import { videoApi } from '../services/videoApi'
+import StreamStatus from './StreamStatus.vue'
+import ReportCard from './ReportCard.vue'
 
 const router = useRouter()
 
 // 响应式数据
 const querying = ref(false)
 const generating = ref(false)
+const streamGenerating = ref(false)
 const similarStages = ref([])
 const comparisonReport = ref(null)
+const streamReport = ref('')
+const streamStatus = ref('')
+const streamProgress = ref(0)
+const streamEventSource = ref(null)
+const reportCardRef = ref(null)
 const error = ref(null)
 
 const queryParams = ref({
@@ -195,6 +204,16 @@ const queryParams = ref({
   k: 5,
   similarity_threshold: 0.7
 })
+
+// 监听streamReport变化，确保UI更新
+watch(streamReport, (newValue) => {
+  console.log('streamReport更新:', newValue.length, '字符')
+  if (newValue && streamGenerating.value) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}, { immediate: true })
 
 // 表格列配置
 const reportTableColumns = [
@@ -284,6 +303,7 @@ const generateReport = async () => {
     
     if (result.success) {
       comparisonReport.value = result.data
+      streamReport.value = '' // 清空流式报告
       message.success('对比报告生成完成')
     } else {
       throw new Error(result.message || '报告生成失败')
@@ -295,6 +315,106 @@ const generateReport = async () => {
   } finally {
     generating.value = false
   }
+}
+
+// 自动滚动到底部的函数
+const scrollToBottom = async () => {
+  await nextTick()
+  if (reportCardRef.value && reportCardRef.value.scrollToBottom) {
+    reportCardRef.value.scrollToBottom()
+  }
+}
+
+const generateReportStream = () => {
+  if (!queryParams.value.query.trim()) {
+    message.error('请输入查询描述')
+    return
+  }
+  
+  // 重置状态
+  streamGenerating.value = true
+  streamReport.value = ''
+  streamStatus.value = '正在初始化...'
+  streamProgress.value = 10
+  error.value = null
+  comparisonReport.value = null // 清空普通报告
+  
+  console.log('开始流式生成报告...')
+  
+  // 创建SSE连接
+  streamEventSource.value = videoApi.generateComparisonReportStream(
+    {
+      query: queryParams.value.query,
+      product_name: queryParams.value.product_name,
+      similarity_threshold: queryParams.value.similarity_threshold
+    },
+    // onMessage
+    (data) => {
+      console.log('收到流式数据:', data)
+      
+      if (data.type === 'init') {
+        streamStatus.value = data.message || '开始生成报告...'
+        streamProgress.value = 20
+        // 处理初始化数据中的源信息
+        if (data.source_count) {
+          streamStatus.value = `找到 ${data.source_count} 个相似阶段，正在分析...`
+          streamProgress.value = 30
+        }
+      } else if (data.type === 'content') {
+        // 累积内容
+        const newContent = data.content || ''
+        streamReport.value += newContent
+        streamProgress.value = Math.min(90, streamProgress.value + 2)
+        streamStatus.value = '正在生成内容...'
+        
+        console.log('更新内容:', newContent, '总内容长度:', streamReport.value.length)
+        
+        // 强制触发响应式更新
+        nextTick(() => {
+          scrollToBottom()
+        })
+      } else if (data.type === 'stage_info') {
+        streamStatus.value = `找到 ${data.count || 0} 个相似阶段，正在分析...`
+        streamProgress.value = 40
+      } else if (data.type === 'complete') {
+        streamStatus.value = '报告生成完成'
+        streamProgress.value = 100
+        streamGenerating.value = false
+        streamEventSource.value = null
+        message.success('流式报告生成完成')
+        scrollToBottom()
+      }
+    },
+    // onError
+    (errorData) => {
+      console.error('Stream error:', errorData)
+      error.value = errorData.message || '流式生成过程中发生错误'
+      message.error('流式生成报告失败')
+      streamGenerating.value = false
+      streamEventSource.value = null
+    },
+    // onComplete
+    () => {
+      console.log('流式生成完成')
+      streamStatus.value = '报告生成完成'
+      streamProgress.value = 100
+      streamGenerating.value = false
+      streamEventSource.value = null
+      message.success('流式报告生成完成')
+      // 最终滚动到底部
+      scrollToBottom()
+    }
+  )
+}
+
+const stopStreamGeneration = () => {
+  if (streamEventSource.value) {
+    streamEventSource.value.close()
+    streamEventSource.value = null
+  }
+  streamGenerating.value = false
+  streamStatus.value = '已停止生成'
+  message.info('已停止报告生成')
 }
 
 const getSimilarityColor = (similarity) => {
@@ -316,14 +436,7 @@ const formatDuration = (seconds) => {
   return `${milliseconds}ms`
 }
 
-const formatReport = (report) => {
-  if (!report) return ''
-  // 简单的Markdown到HTML转换
-  return report
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-}
+
 
 const viewVideoDetail = (videoId) => {
   router.push({ name: 'video-detail', params: { id: videoId } })
@@ -334,10 +447,11 @@ const viewVideoAnalysis = (videoId) => {
 }
 
 const copyReport = async () => {
-  if (!comparisonReport.value?.report) return
+  const reportContent = streamReport.value || comparisonReport.value?.report
+  if (!reportContent) return
   
   try {
-    await navigator.clipboard.writeText(comparisonReport.value.report)
+    await navigator.clipboard.writeText(reportContent)
     message.success('报告已复制到剪贴板')
   } catch (err) {
     message.error('复制失败')
@@ -345,9 +459,10 @@ const copyReport = async () => {
 }
 
 const downloadReport = () => {
-  if (!comparisonReport.value?.report) return
+  const reportContent = streamReport.value || comparisonReport.value?.report
+  if (!reportContent) return
   
-  const blob = new Blob([comparisonReport.value.report], { type: 'text/plain;charset=utf-8' })
+  const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -408,29 +523,6 @@ const downloadReport = () => {
   font-size: 14px;
 }
 
-.comparison-report {
-  margin-top: 24px;
-}
-
-.report-card {
-  margin-bottom: 16px;
-}
-
-.report-content {
-  line-height: 1.6;
-  font-size: 14px;
-  white-space: pre-wrap;
-}
-
-.report-stages {
-  margin-top: 16px;
-}
-
-.report-stages h4 {
-  margin-bottom: 12px;
-  color: #1890ff;
-}
-
 .error-section {
   margin-top: 16px;
 }
@@ -443,6 +535,14 @@ const downloadReport = () => {
   
   .stage-card {
     margin-bottom: 12px;
+  }
+  
+  .stream-progress {
+    padding: 16px;
+  }
+  
+  .stream-progress p {
+    font-size: 14px;
   }
 }
 </style>
